@@ -1,9 +1,14 @@
 {
     "version": 2,
-    "builds": [
+    "functions": {
+        "api/index.go": {
+            "runtime": "vercel-go@0.5.0"
+        }
+    },
+    "routes": [
         {
-            "src": "Dockerfile",
-            "use": "@vercel/docker"
+            "src": "/api/(.*)",
+            "dest": "api/index.go"
         }
     ]
 }

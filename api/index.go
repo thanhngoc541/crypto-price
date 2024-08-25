@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -11,13 +10,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// APIResponse represents the structure of the API response
 type APIResponse struct {
 	Source string `json:"source"`
 	Price  string `json:"price"`
 }
 
-// Map of CoinGecko identifiers for different symbols
 var coinGeckoSymbols = map[string]string{
 	"BTC":  "bitcoin",
 	"ETH":  "ethereum",
@@ -26,7 +23,6 @@ var coinGeckoSymbols = map[string]string{
 	"SHIB": "shiba-inu",
 }
 
-// Map of Kraken identifiers for different symbols
 var krakenSymbols = map[string]string{
 	"BTC":  "XXBTZUSD",
 	"ETH":  "XETHZUSD",
@@ -35,7 +31,6 @@ var krakenSymbols = map[string]string{
 	"SHIB": "SHIBUSD",
 }
 
-// Utility function to make an HTTP GET request and decode the JSON response
 func fetchPrice(url string, target interface{}) error {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -54,7 +49,6 @@ func fetchPrice(url string, target interface{}) error {
 	return nil
 }
 
-// Fetch price from Binance
 func getPriceFromBinance(symbol string) (string, error) {
 	url := fmt.Sprintf("https://api.binance.com/api/v3/ticker/price?symbol=%sUSDT", strings.ToUpper(symbol))
 	var result struct {
@@ -62,12 +56,11 @@ func getPriceFromBinance(symbol string) (string, error) {
 	}
 	err := fetchPrice(url, &result)
 	if err != nil {
-		log.Printf("Binance error: %v", err)
+		return "", err
 	}
-	return result.Price, err
+	return result.Price, nil
 }
 
-// Fetch price from CoinGecko
 func getPriceFromCoinGecko(symbol string) (string, error) {
 	coinGeckoSymbol, ok := coinGeckoSymbols[strings.ToUpper(symbol)]
 	if !ok {
@@ -77,14 +70,12 @@ func getPriceFromCoinGecko(symbol string) (string, error) {
 	var result map[string]map[string]float64
 	err := fetchPrice(url, &result)
 	if err != nil {
-		log.Printf("CoinGecko error: %v", err)
 		return "", err
 	}
 	price := result[coinGeckoSymbol]["usd"]
 	return fmt.Sprintf("%.2f", price), nil
 }
 
-// Fetch price from Kraken
 func getPriceFromKraken(symbol string) (string, error) {
 	krakenPair, ok := krakenSymbols[strings.ToUpper(symbol)]
 	if !ok {
@@ -99,7 +90,6 @@ func getPriceFromKraken(symbol string) (string, error) {
 	}
 	err := fetchPrice(url, &result)
 	if err != nil {
-		log.Printf("Kraken error: %v", err)
 		return "", err
 	}
 	priceList := result.Result[krakenPair]
@@ -109,7 +99,6 @@ func getPriceFromKraken(symbol string) (string, error) {
 	return priceList.C[0], nil
 }
 
-// Fetch price from Coinbase
 func getPriceFromCoinbase(symbol string) (string, error) {
 	url := fmt.Sprintf("https://api.coinbase.com/v2/prices/%s-USD/spot", strings.ToUpper(symbol))
 	var result struct {
@@ -119,12 +108,11 @@ func getPriceFromCoinbase(symbol string) (string, error) {
 	}
 	err := fetchPrice(url, &result)
 	if err != nil {
-		log.Printf("Coinbase error: %v", err)
+		return "", err
 	}
-	return result.Data.Amount, err
+	return result.Data.Amount, nil
 }
 
-// Fetch prices from all sources concurrently
 func fetchPricesConcurrently(symbol string) []APIResponse {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -150,7 +138,6 @@ func fetchPricesConcurrently(symbol string) []APIResponse {
 			defer wg.Done()
 			price, err := source.Fetch(source.Symbol)
 			if err != nil {
-				log.Printf("Error fetching price from %s for symbol %s: %v", source.Name, source.Symbol, err)
 				price = "Error fetching price"
 			}
 			mu.Lock()
@@ -163,17 +150,14 @@ func fetchPricesConcurrently(symbol string) []APIResponse {
 	return prices
 }
 
-func main() {
-	r := gin.Default()
-
-	// Dynamic route to fetch the price based on the symbol
-	r.GET("/price/:symbol", func(c *gin.Context) {
-		symbol := c.Param("symbol")
-		prices := fetchPricesConcurrently(symbol)
-		c.JSON(http.StatusOK, gin.H{"prices": prices})
-	})
-
-	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("Failed to run server: %v", err)
+// Handler is the main function that will handle requests
+func Handler(w http.ResponseWriter, r *http.Request) {
+	symbol := strings.TrimPrefix(r.URL.Path, "/api/")
+	if symbol == "" {
+		http.Error(w, "Missing symbol", http.StatusBadRequest)
+		return
 	}
+	prices := fetchPricesConcurrently(symbol)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(gin.H{"prices": prices})
 }
