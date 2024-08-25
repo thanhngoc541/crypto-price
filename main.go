@@ -1,4 +1,4 @@
-package handler
+package main
 
 import (
 	"encoding/json"
@@ -157,14 +157,19 @@ func fetchPricesConcurrently(symbol string) []APIResponse {
 	return prices
 }
 
-// Handler is the main function that will handle requests
-func Handler(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.TrimPrefix(r.URL.Path, "/api/price/")
-	if symbol == "" {
-		http.Error(w, "Missing symbol", http.StatusBadRequest)
-		return
-	}
-	prices := fetchPricesConcurrently(symbol)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(gin.H{"prices": prices})
+// main function to start the server
+func main() {
+	r := gin.Default()
+
+	r.GET("/api/price/:symbol", func(c *gin.Context) {
+		symbol := c.Param("symbol")
+		if symbol == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Missing symbol"})
+			return
+		}
+		prices := fetchPricesConcurrently(symbol)
+		c.JSON(http.StatusOK, gin.H{"prices": prices})
+	})
+
+	r.Run(":8080") // Run the server on port 8080
 }
