@@ -152,7 +152,7 @@ func fetchPricesConcurrently(symbol string) []APIResponse {
 
 // Handler is the main function that will handle requests
 func Handler(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.TrimPrefix(r.URL.Path, "/api/")
+	symbol := strings.TrimPrefix(r.URL.Path, "/api/price/")
 	if symbol == "" {
 		http.Error(w, "Missing symbol", http.StatusBadRequest)
 		return
