@@ -46,7 +46,14 @@ func fetchPrice(url string, target interface{}) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error fetching price, status code: %d", resp.StatusCode)
+		var apiError struct {
+			Code    int    `json:"code"`
+			Message string `json:"msg"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&apiError); err != nil {
+			return fmt.Errorf("failed to decode error message: %v", err)
+		}
+		return fmt.Errorf("API error %d: %s", apiError.Code, apiError.Message)
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
@@ -145,7 +152,7 @@ func fetchPricesConcurrently(symbol string) []APIResponse {
 			defer wg.Done()
 			price, err := source.Fetch(source.Symbol)
 			if err != nil {
-				price = "Error fetching price"
+				price = err.Error()
 			}
 			mu.Lock()
 			prices[i] = APIResponse{Source: fmt.Sprintf("%s (%s)", source.Name, strings.ToUpper(symbol)), Price: price}
